@@ -132,3 +132,14 @@ Either way, nothing posts without a named reviewer approving it.
   Production needs sign-in and maker-checker roles (preparer ≠ approver).
 - **Postgres** instead of SQLite, and storing PDFs in your document system
 - **Cash settlement:** matching capital calls to wires, and distributions to receipts from bank data
+
+## Browser-only demo
+
+`demo/build_demo.py` builds a single self-contained HTML page (`data/demo/index.html`) with the sample
+data and an image of every PDF embedded, and the checks and posting rules re-implemented in
+JavaScript. It needs no server, which makes it easy to share for a walkthrough. Nothing in it is saved,
+and it can't read new PDFs; use the real app for that.
+
+```bash
+python demo/build_demo.py
+```

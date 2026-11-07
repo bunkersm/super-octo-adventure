@@ -1,0 +1,653 @@
+<title>LP Activity Tracker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky ledger-style top bar, one working column; review screen splits source PDF | extracted data. */
+:root {
+  --bg: #f4f6f7; --panel: #ffffff; --fg: #17212b; --muted: #5a6875; --line: #dbe1e5;
+  --ink: #165a72; --ink-soft: #e3eff3; --ink-fg: #ffffff;
+  --pass: #1b7445; --pass-soft: #e3f3e9; --warn: #8c5a00; --warn-soft: #fbf0d6; --fail: #ad2a22; --fail-soft: #fae6e3;
+  --demo: #f0e9fb; --demo-fg: #4b3480;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11171c; --panel: #182128; --fg: #e3e9ee; --muted: #93a2ae; --line: #2a3641;
+    --ink: #74bdd6; --ink-soft: #1a3340; --ink-fg: #0e1a20;
+    --pass: #6dcb94; --pass-soft: #142a1e; --warn: #e5b45a; --warn-soft: #2d2410; --fail: #f08b80; --fail-soft: #33191a;
+    --demo: #251d38; --demo-fg: #c9b6f2; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11171c; --panel: #182128; --fg: #e3e9ee; --muted: #93a2ae; --line: #2a3641;
+  --ink: #74bdd6; --ink-soft: #1a3340; --ink-fg: #0e1a20;
+  --pass: #6dcb94; --pass-soft: #142a1e; --warn: #e5b45a; --warn-soft: #2d2410; --fail: #f08b80; --fail-soft: #33191a;
+  --demo: #251d38; --demo-fg: #c9b6f2; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 14px/1.5 var(--sans); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--panel); }
+a { color: var(--ink); }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.gutter { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); }
+.top-in { display: flex; align-items: center; gap: 8px 20px; flex-wrap: wrap; padding-block: 10px; max-width: 1480px; margin: 0 auto; }
+.brand { font-weight: 700; letter-spacing: .01em; }
+.brand small { font-weight: 500; color: var(--muted); margin-left: 6px; font-size: 12px; }
+nav { display: flex; gap: 2px; flex-wrap: wrap; }
+nav a { padding: 6px 10px; border-radius: 6px; text-decoration: none; color: var(--muted); font-weight: 500; }
+nav a.active { background: var(--ink-soft); color: var(--ink); }
+.reviewer { margin-left: auto; display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; }
+.demo-bar { background: var(--demo); color: var(--demo-fg); font-size: 13px; }
+.demo-bar .in { max-width: 1480px; margin: 0 auto; padding-block: 7px; display: flex; gap: 6px 14px; align-items: center; flex-wrap: wrap; }
+.demo-bar button { padding: 3px 10px; font-size: 12px; }
+main { max-width: 1480px; margin: 0 auto; padding-block: 20px 48px; }
+h1 { font-size: 21px; margin: 0 0 2px; text-wrap: balance; overflow-wrap: anywhere; }
+h2 { font-size: 14px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+.sub { color: var(--muted); margin: 0 0 16px; max-width: 75ch; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; min-width: 0; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
+.tile .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+.tile .v { font: 600 20px/1.3 var(--mono); font-variant-numeric: tabular-nums; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tbody tr:last-child td { border-bottom: 0; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; white-space: nowrap; }
+td.num, th.num { text-align: right; white-space: nowrap; }
+td.num { font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+tr.click { cursor: pointer; }
+tr.click:hover td { background: var(--ink-soft); }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 500; background: var(--ink-soft); color: var(--ink); white-space: nowrap; }
+.pill:empty { display: none; }
+.s-pass { background: var(--pass-soft); color: var(--pass); }
+.s-warn { background: var(--warn-soft); color: var(--warn); }
+.s-fail { background: var(--fail-soft); color: var(--fail); }
+.muted { color: var(--muted); }
+button, .btn { font: inherit; font-weight: 500; padding: 7px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); cursor: pointer; }
+button.primary { background: var(--ink); border-color: var(--ink); color: var(--ink-fg); }
+button.danger { color: var(--fail); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+input, select, textarea { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); min-width: 0; }
+input.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.banner { max-width: 1480px; margin: 12px auto 0; padding: 10px 14px; border-radius: 6px; background: var(--fail-soft); color: var(--fail); }
+.banner.ok { background: var(--pass-soft); color: var(--pass); }
+.banner-wrap:empty { display: none; }
+.review { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.source { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 64px); }
+.source img { display: block; width: 100%; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.source .cap { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+.fields label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); min-width: 0; }
+.fields label.uncertain input { border-color: var(--warn); background: var(--warn-soft); }
+.checks { list-style: none; padding: 0; margin: 0; }
+.checks li { display: flex; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.checks li:last-child { border-bottom: 0; }
+.checks .detail { color: var(--muted); font-size: 12px; }
+.badge { flex: 0 0 44px; text-align: center; font-size: 10px; font-weight: 700; padding: 2px 0; border-radius: 4px; height: fit-content; letter-spacing: .05em; text-transform: uppercase; }
+.je { margin-bottom: 12px; }
+.je-head { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.je td.acct { white-space: nowrap; }
+.je tr.susp td { background: var(--warn-soft); color: var(--warn); }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.row { display: flex; gap: 8px 10px; align-items: center; flex-wrap: wrap; }
+.tour { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.tour a { display: block; text-decoration: none; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.tour a:hover { border-color: var(--ink); }
+.tour b { display: block; color: var(--ink); margin-bottom: 2px; }
+.tour span { color: var(--muted); font-size: 13px; }
+textarea.csv { width: 100%; height: 220px; font: 12px/1.45 var(--mono); white-space: pre; }
+code, .mono { font-family: var(--mono); font-size: 12px; }
+@media (max-width: 900px) {
+  .review { grid-template-columns: minmax(0, 1fr); }
+  .source { position: static; }
+  .fields { grid-template-columns: 1fr; }
+  .reviewer { margin-left: 0; }
+}
+</style>
+
+<header class="top">
+  <div class="top-in gutter">
+    <div class="brand">LP Activity Tracker <small>demo</small></div>
+    <nav id="tabs">
+      <a href="#dashboard">Dashboard</a>
+      <a href="#queue">Review queue <span id="queue-count" class="pill"></span></a>
+      <a href="#funds">Funds</a>
+      <a href="#journal">Journal &amp; export</a>
+      <a href="#k1s">K-1s</a>
+      <a href="#audit">Audit log</a>
+    </nav>
+    <label class="reviewer" for="reviewer">Reviewer <input id="reviewer" placeholder="Your name" autocomplete="name"></label>
+  </div>
+</header>
+<div class="demo-bar gutter"><div class="in">
+  <span>Demo with made-up funds and statements. Nothing you do here is saved; reloading starts over.</span>
+  <button id="reset" type="button">Start over</button>
+</div></div>
+<div class="gutter banner-wrap" id="banner-wrap"></div>
+<main id="view" class="gutter"></main>
+
+<script>
+"use strict";
+const INITIAL = /*__STATE__*/null;
+const META = /*__META__*/null;
+const IMAGES = /*__IMAGES__*/null;
+const TODAY = "2026-11-07"; // the sample data is built around this date
+
+// ================================================================ engine (mirrors the Python app)
+let S;
+const nextId = {};
+function resetState() {
+  S = JSON.parse(JSON.stringify(INITIAL));
+  for (const t of ["documents", "transactions", "statements", "k1s", "journal_entries", "audit_log"])
+    nextId[t] = Math.max(0, ...S[t].map((r) => r.id)) + 1;
+}
+const insert = (table, row) => { row.id = nextId[table]++; S[table].push(row); return row; };
+const r2 = (x) => Math.round(x * 100) / 100;
+const n = (v) => Number(v || 0);
+const TOL = 1.0;
+const nowIso = () => new Date().toISOString().slice(0, 19) + "+00:00";
+const fundBy = (code) => S.funds.find((f) => f.code === code) || null;
+const docBy = (id) => S.documents.find((d) => d.id === Number(id)) || null;
+const fmt = (v) => n(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const audit = (actor, action, document_id, detail) => insert("audit_log", { ts: nowIso(), actor: actor || null, action, document_id: document_id ?? null, detail: detail ?? null });
+
+function bookNav(code, asOf) {
+  let t = 0;
+  for (const j of S.journal_entries) if (j.fund_code === code && (!asOf || j.entry_date <= asOf))
+    for (const l of j.lines) if (l.account_key === "investment") t += l.debit - l.credit;
+  return r2(t);
+}
+function activity(code, type, start, end, includeOpening = true) {
+  let t = 0;
+  for (const x of S.transactions) if (x.fund_code === code && x.txn_type === type && (!start || x.effective_date > start) && (!end || x.effective_date <= end)) t += x.amount;
+  if (includeOpening && !start) {
+    const o = S.transactions.find((x) => x.fund_code === code && x.txn_type === "opening_balance");
+    if (o) t += n(o.detail[type === "contribution" ? "called" : "distributed"]);
+  }
+  return r2(t);
+}
+const recallable = (code) => r2(S.transactions.filter((x) => x.fund_code === code).reduce((a, x) => a + n(x.recallable), 0));
+const unfunded = (f) => r2(f.commitment - activity(f.code, "contribution") + recallable(f.code));
+function lastStatement(code, before) {
+  return S.statements.filter((s) => s.fund_code === code && (!before || s.period_end < before)).sort((a, b) => (a.period_end < b.period_end ? 1 : -1))[0] || null;
+}
+function suspense(code) {
+  let t = 0;
+  for (const j of S.journal_entries) if (j.fund_code === code) for (const l of j.lines) if (l.account_key === "recon_suspense") t += l.debit - l.credit;
+  return r2(t);
+}
+function fundSummary(f) {
+  const called = activity(f.code, "contribution"), distributed = activity(f.code, "distribution"), nav = bookNav(f.code), st = lastStatement(f.code);
+  return { ...f, called, distributed, recallable: recallable(f.code), unfunded: unfunded(f), book_nav: nav,
+    last_statement_period: st?.period_end ?? null, gp_nav: st?.ending_balance ?? null, suspense: suspense(f.code),
+    dpi: called ? r2(distributed / called) : null, tvpi: called ? r2((distributed + nav) / called) : null, pct_called: f.commitment ? called / f.commitment : null };
+}
+
+const REQUIRED = {
+  capital_call: ["fund_name", "effective_date", "capital_call.total"],
+  distribution: ["fund_name", "effective_date", "distribution.net_amount"],
+  capital_account_statement: ["fund_name", "period_end", "capital_account.beginning_balance", "capital_account.ending_balance"],
+  financial_statements: ["fund_name", "period_end"], k1: ["fund_name", "tax_year"], other: [],
+};
+const getField = (o, dotted) => dotted.split(".").reduce((c, p) => (c && typeof c === "object" ? c[p] : undefined), o);
+const empty = (v) => v === null || v === undefined || v === "";
+const chk = (code, label, status, detail = "") => ({ code, label, status, detail });
+const dayBefore = (iso) => { const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); };
+
+function runChecks(docType, ex, fund, docId, sha) {
+  const c = [];
+  if (sha) {
+    const dup = S.documents.find((d) => d.sha256 === sha && d.id < (docId ?? Infinity) && d.status !== "rejected");
+    c.push(chk("duplicate_file", "Not a duplicate file", dup ? "fail" : "pass", dup ? `Identical file already loaded as #${dup.id} (${dup.file_name})` : ""));
+  }
+  c.push(chk("doc_type", "Document type identified", docType && docType !== "other" ? "pass" : "fail", docType !== "other" ? "" : "Pick the document type manually"));
+  c.push(chk("fund_match", "Matched to a fund in the master list", fund ? "pass" : "fail",
+    fund ? `${fund.code} - ${fund.name}` : `No fund matches '${ex.fund_name || "?"}'. Select the fund or add it to the master list.`));
+  const missing = (REQUIRED[docType] || []).filter((f) => empty(getField(ex, f)));
+  c.push(chk("required_fields", "Required fields present", missing.length ? "fail" : "pass", missing.join(", ")));
+  if (!fund) return c;
+  const code = fund.code;
+
+  if (docType === "capital_call") {
+    const cc = ex.capital_call || {};
+    const parts = ["investment", "management_fee", "fund_expenses", "other"].map((k) => cc[k]);
+    if (parts.some((p) => !empty(p)) && !empty(cc.total)) {
+      const s = parts.reduce((a, p) => a + n(p), 0);
+      c.push(chk("call_components", "Call components add up to total", Math.abs(r2(s - n(cc.total))) <= TOL ? "pass" : "fail", `Components ${fmt(s)} vs total ${fmt(cc.total)}`));
+    }
+    const unf = unfunded(fund), total = n(cc.total);
+    c.push(chk("unfunded", "Call within unfunded commitment", total <= unf + TOL ? "pass" : "fail", `Call ${fmt(total)} vs unfunded ${fmt(unf)} (commitment ${fmt(fund.commitment)})`));
+    sameTxn(c, code, "contribution", ex.effective_date, total);
+  } else if (docType === "distribution") {
+    const d = ex.distribution || {};
+    const gp = ["return_of_capital", "realized_gain", "income"].map((k) => d[k]);
+    if (gp.some((p) => !empty(p)) && !empty(d.net_amount)) {
+      const gross = gp.reduce((a, p) => a + n(p), 0), exp = r2(gross - n(d.withholding));
+      c.push(chk("dist_components", "Distribution components less withholding = net", Math.abs(r2(exp - n(d.net_amount))) <= TOL ? "pass" : "fail",
+        `Gross ${fmt(gross)} - withholding ${fmt(d.withholding)} = ${fmt(exp)} vs net ${fmt(d.net_amount)}`));
+    }
+    if (n(d.recallable) > n(d.return_of_capital) + TOL)
+      c.push(chk("recallable", "Recallable amount within return of capital", "warn", `Recallable ${fmt(d.recallable)} exceeds ROC ${fmt(d.return_of_capital)}`));
+    sameTxn(c, code, "distribution", ex.effective_date, n(d.net_amount) + n(d.withholding));
+  } else if (docType === "capital_account_statement") {
+    const ca = ex.capital_account || {};
+    const computed = n(ca.beginning_balance) + n(ca.contributions) - n(ca.distributions) + n(ca.investment_income) - n(ca.expenses) + n(ca.realized_gain) + n(ca.unrealized_gain) - n(ca.carried_interest);
+    const diff = r2(computed - n(ca.ending_balance));
+    c.push(chk("roll_forward", "Capital account rolls forward", Math.abs(diff) <= TOL ? "pass" : "fail", `Beginning + activity = ${fmt(computed)} vs ending ${fmt(ca.ending_balance)} (diff ${fmt(diff)})`));
+    const pe = ex.period_end;
+    const prior = pe ? lastStatement(code, pe) : null;
+    if (prior) {
+      const d = r2(n(ca.beginning_balance) - prior.ending_balance);
+      c.push(chk("continuity", "Beginning balance = prior statement's ending balance", Math.abs(d) <= TOL ? "pass" : "fail", `Prior (${prior.period_end}) ending ${fmt(prior.ending_balance)} vs beginning ${fmt(ca.beginning_balance)}`));
+    }
+    if (pe && S.statements.some((s) => s.fund_code === code && s.period_end === pe))
+      c.push(chk("duplicate_period", "No statement already booked for this period", "fail", `A ${pe} statement for ${code} is already approved`));
+    const start = ex.period_start ? dayBefore(ex.period_start) : prior?.period_end;
+    if (pe && start) for (const [kind, field] of [["contribution", "contributions"], ["distribution", "distributions"]]) {
+      const book = activity(code, kind, start, pe), gpv = n(ca[field]), d = r2(book - gpv);
+      c.push(chk(`recon_${field}`, `GP ${field} agree to our books`, Math.abs(d) <= TOL ? "pass" : "warn",
+        `Books ${fmt(book)} vs GP ${fmt(gpv)} for ${start} to ${pe}` + (Math.abs(d) <= TOL ? "" : ". Look for unrecorded or pending notices; the gap will post to suspense.")));
+    }
+    if (!empty(ca.unfunded_commitment)) {
+      const bu = unfunded(fund), d = r2(bu - n(ca.unfunded_commitment));
+      c.push(chk("recon_unfunded", "GP unfunded commitment agrees to our books", Math.abs(d) <= TOL ? "pass" : "warn", `Books ${fmt(bu)} vs GP ${fmt(ca.unfunded_commitment)}`));
+    }
+  } else if (docType === "k1") {
+    const k = ex.k1 || {};
+    c.push(chk("k1_final", "K-1 is final (not an estimate)", k.is_final ? "pass" : "warn", k.is_final ? "" : "Estimate - expect a final K-1 later"));
+    const y = ex.tax_year;
+    if (y && !empty(k.distributions)) {
+      const has = S.transactions.some((x) => x.fund_code === code && x.txn_type === "distribution" && x.effective_date.startsWith(`${y}-`));
+      if (has) {
+        const book = activity(code, "distribution", `${y - 1}-12-31`, `${y}-12-31`), d = r2(book - n(k.distributions));
+        c.push(chk("k1_distributions", "Box 19 distributions agree to our books", Math.abs(d) <= TOL ? "pass" : "warn", `Books ${fmt(book)} vs K-1 ${fmt(k.distributions)} for ${y}`));
+      } else c.push(chk("k1_distributions", "Box 19 distributions agree to our books", "warn", `No ${y} distributions in the books to compare (year predates this system?)`));
+    }
+  }
+  return c;
+}
+function sameTxn(c, code, type, date, amount) {
+  if (!date) return;
+  const hit = S.transactions.find((x) => x.fund_code === code && x.txn_type === type && x.effective_date === date && Math.abs(x.amount - amount) <= TOL);
+  c.push(chk("duplicate_txn", `No matching ${type} already booked`, hit ? "fail" : "pass", hit ? `Same fund, date and amount already booked (transaction #${hit.id})` : ""));
+}
+const summarize = (cs) => (cs.some((x) => x.status === "fail") ? "fail" : cs.some((x) => x.status === "warn") ? "warn" : "pass");
+
+function line(account_key, debit = 0, credit = 0, memo = null) {
+  if (debit < 0) { credit = credit - debit; debit = 0; }
+  if (credit < 0) { debit = debit - credit; credit = 0; }
+  return { account_key, debit: r2(debit), credit: r2(credit), memo };
+}
+function buildEntries(docType, ex, fund, before) {
+  const code = fund.code, out = [];
+  if (docType === "capital_call") {
+    const cc = ex.capital_call || {}, total = n(cc.total);
+    const parts = ["investment", "management_fee", "fund_expenses", "other"].filter((k) => cc[k]).map((k) => `${k.replace("_", " ")} ${fmt(cc[k])}`).join(", ");
+    out.push({ entry_type: "capital_call", entry_date: ex.effective_date || ex.notice_date, memo: `${code} capital call due ${ex.effective_date}` + (parts ? ` (${parts})` : ""),
+      lines: [line("investment", total), line("capital_call_payable", 0, total)] });
+  } else if (docType === "distribution") {
+    const d = ex.distribution || {}, net = n(d.net_amount), wh = n(d.withholding);
+    const lines = [line("distribution_receivable", net)];
+    if (wh) lines.push(line("tax_withheld", wh));
+    lines.push(line("investment", 0, net + wh, `ROC ${fmt(d.return_of_capital)} / gain ${fmt(d.realized_gain)} / income ${fmt(d.income)}`));
+    out.push({ entry_type: "distribution", entry_date: ex.effective_date || ex.notice_date, memo: `${code} distribution paid ${ex.effective_date}`, lines });
+  } else if (docType === "capital_account_statement") {
+    const ca = ex.capital_account || {}, ending = n(ca.ending_balance), needed = r2(ending - n(before));
+    const comp = [["investment_income", n(ca.investment_income), "investment_income"], ["expenses", -n(ca.expenses), "partnership_expenses"],
+      ["realized_gain", n(ca.realized_gain), "realized_gain"], ["unrealized_gain", n(ca.unrealized_gain), "unrealized_gain"], ["carried_interest", -n(ca.carried_interest), "carried_interest"]];
+    const pnl = r2(comp.reduce((a, x) => a + x[1], 0));
+    const lines = comp.filter((x) => x[1]).map((x) => line(x[2], 0, x[1]));
+    const residual = r2(needed - pnl);
+    if (residual) lines.push(line("recon_suspense", 0, residual, "Book vs GP difference - investigate and clear"));
+    if (needed) lines.push(line("investment", needed));
+    if (lines.length) out.push({ entry_type: "nav_true_up", entry_date: ex.period_end, memo: `${code} record share of earnings to GP NAV ${fmt(ending)} for period ended ${ex.period_end}`, lines });
+  }
+  for (const e of out) { e.fund_code = code; e.balanced = r2(e.lines.reduce((a, l) => a + l.debit - l.credit, 0)) === 0; }
+  return out;
+}
+function proposedEntries(docType, ex, fund) {
+  const before = docType === "capital_account_statement" ? bookNav(fund.code, ex.period_end) : null;
+  const entries = buildEntries(docType, ex, fund, before);
+  const date = ex.effective_date;
+  if (["capital_call", "distribution"].includes(docType) && date && entries.length) {
+    const covered = S.statements.filter((s) => s.fund_code === fund.code && s.document_id !== null && s.period_end >= date).sort((a, b) => (a.period_end > b.period_end ? 1 : -1))[0];
+    if (covered) {
+      const inv = entries[0].lines.find((l) => l.account_key === "investment"), amt = inv.debit || inv.credit, call = docType === "capital_call";
+      entries.push({ fund_code: fund.code, entry_type: "suspense_clear", entry_date: date, balanced: true,
+        memo: `${fund.code} clear suspense: ${docType.replace("_", " ")} already in GP NAV at ${covered.period_end}`,
+        lines: [line("recon_suspense", call ? amt : 0, call ? 0 : amt), line("investment", call ? 0 : amt, call ? amt : 0)] });
+    }
+  }
+  return entries;
+}
+function withLines(je) {
+  const d = je.document_id ? docBy(je.document_id) : null;
+  return { ...je, file_name: d?.file_name ?? null, lines: je.lines.map((l) => ({ ...l, account_number: META.accounts[l.account_key].number, account_name: META.accounts[l.account_key].name })) };
+}
+function getDocument(id) {
+  const d = docBy(id);
+  if (!d) return null;
+  const fund = d.fund_code ? fundBy(d.fund_code) : null;
+  const awaiting = ["needs_review", "duplicate"].includes(d.status);
+  return { ...d, fund, overall: summarize(d.validation || []),
+    proposed_entries: awaiting && fund ? proposedEntries(d.doc_type, d.extraction, fund) : [],
+    posted_entries: d.status === "approved" ? S.journal_entries.filter((j) => j.document_id === d.id).map(withLines) : [],
+    history: S.audit_log.filter((a) => a.document_id === d.id) };
+}
+function updateDocument(id, actor, extraction, fundCode, docType) {
+  const d = docBy(id);
+  if (!["needs_review", "duplicate"].includes(d.status)) throw new Error("Only documents awaiting review can be edited");
+  let ex = { ...(d.extraction || {}), ...(extraction || {}) };
+  if (docType) ex.doc_type = docType;
+  const fund = fundCode ? fundBy(fundCode) : null;
+  d.extraction = ex; d.doc_type = ex.doc_type; d.fund_code = fund?.code ?? null;
+  d.validation = runChecks(ex.doc_type, ex, fund, d.id, d.sha256);
+  audit(actor, "edited", d.id, { fields: Object.keys(extraction || {}).sort(), fund: fundCode, doc_type: docType });
+}
+function approve(id, actor, note, override) {
+  if (!actor) throw new Error("Enter your name in the Reviewer box first; it is recorded on the approval.");
+  const d = docBy(id);
+  if (!["needs_review", "duplicate"].includes(d.status)) throw new Error(`Document is ${d.status}, not awaiting review`);
+  const fund = d.fund_code ? fundBy(d.fund_code) : null, ex = d.extraction, t = d.doc_type;
+  const checks = runChecks(t, ex, fund, d.id, d.sha256);
+  const fails = checks.filter((x) => x.status === "fail");
+  const hard = fails.filter((x) => ["fund_match", "doc_type", "required_fields"].includes(x.code));
+  if (hard.length) { d.validation = checks; throw new Error("Cannot approve: " + hard.map((x) => x.label).join("; ") + "."); }
+  if (fails.length && !(override && note)) { d.validation = checks; throw new Error("Checks failed: " + fails.map((x) => x.label).join("; ") + ". Fix the fields, or tick Override and write a note explaining why."); }
+  const code = fund.code;
+  const entries = proposedEntries(t, ex, fund); // computed before this document's own records are added
+  if (t === "capital_call") insert("transactions", { document_id: d.id, fund_code: code, txn_type: "contribution", effective_date: ex.effective_date, amount: n(ex.capital_call.total), recallable: 0, detail: ex.capital_call });
+  else if (t === "distribution") { const x = ex.distribution; insert("transactions", { document_id: d.id, fund_code: code, txn_type: "distribution", effective_date: ex.effective_date, amount: n(x.net_amount) + n(x.withholding), recallable: n(x.recallable), detail: x }); }
+  else if (t === "capital_account_statement") { const ca = ex.capital_account; insert("statements", { document_id: d.id, fund_code: code, period_start: ex.period_start, period_end: ex.period_end, ...ca, ending_balance: n(ca.ending_balance) }); }
+  else if (t === "k1") insert("k1s", { document_id: d.id, fund_code: code, tax_year: ex.tax_year, is_final: ex.k1?.is_final ? 1 : 0, boxes: ex.k1 || {} });
+  for (const e of entries) insert("journal_entries", { document_id: d.id, fund_code: code, entry_date: e.entry_date, entry_type: e.entry_type, memo: e.memo, created_at: nowIso(), export_batch: null, lines: e.lines });
+  Object.assign(d, { status: "approved", reviewed_by: actor, reviewed_at: nowIso(), review_note: note, validation: checks });
+  audit(actor, "approved", d.id, { override: fails.length > 0, note, entries: entries.length });
+}
+function reject(id, actor, note) {
+  if (!actor) throw new Error("Enter your name in the Reviewer box first.");
+  const d = docBy(id);
+  if (!["needs_review", "duplicate"].includes(d.status)) throw new Error(`Document is ${d.status}, not awaiting review`);
+  Object.assign(d, { status: "rejected", reviewed_by: actor, reviewed_at: nowIso(), review_note: note });
+  audit(actor, "rejected", d.id, { note });
+}
+function outstanding() {
+  const today = new Date(TODAY + "T00:00:00Z"), m = Math.floor(today.getUTCMonth() / 3) * 3;
+  const qEnd = m ? new Date(Date.UTC(today.getUTCFullYear(), m, 0)).toISOString().slice(0, 10) : `${today.getUTCFullYear() - 1}-12-31`;
+  const year = today.getUTCFullYear() - 1, items = [];
+  const pending = (code, type) => S.documents.find((d) => d.fund_code === code && d.doc_type === type && ["needs_review", "duplicate"].includes(d.status));
+  for (const f of [...S.funds].sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!S.statements.some((s) => s.fund_code === f.code && s.period_end >= qEnd)) {
+      const p = pending(f.code, "capital_account_statement");
+      items.push({ fund_code: f.code, kind: "statement", item: `Capital account statement for ${qEnd}`, state: p ? "in review queue" : "not received", document_id: p?.id, portal: f.portal });
+    }
+    const k = S.k1s.filter((x) => x.fund_code === f.code && x.tax_year === year).sort((a, b) => b.is_final - a.is_final)[0];
+    if (!k || !k.is_final) {
+      const p = pending(f.code, "k1");
+      items.push({ fund_code: f.code, kind: "k1", item: `${year} Schedule K-1 (final)`, state: k ? "estimate only" : p ? "in review queue" : "not received", document_id: p?.id, portal: f.portal });
+    }
+  }
+  for (const d of S.documents) if (d.doc_type === "capital_call" && d.status === "needs_review") {
+    const due = d.extraction?.effective_date, amt = d.extraction?.capital_call?.total;
+    if (due && due >= TODAY) items.push({ fund_code: d.fund_code, kind: "call_due", item: `Capital call ${fmt(amt)} due ${due}`, state: "awaiting approval", document_id: d.id, portal: null });
+  }
+  return { as_of_quarter: qEnd, tax_year: year, items };
+}
+function exportCsv(batch, includeExported) {
+  const jes = S.journal_entries.filter((j) => includeExported || !j.export_batch).sort((a, b) => (a.entry_date === b.entry_date ? a.id - b.id : a.entry_date < b.entry_date ? -1 : 1));
+  const q = (v) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+  const rows = [["je_id", "entry_date", "entity", "account_number", "account_name", "fund_code", "debit", "credit", "description", "entry_type", "source_document"]];
+  for (const je of jes) { const w = withLines(je); for (const l of w.lines) rows.push([je.id, je.entry_date, META.entity, l.account_number, l.account_name, je.fund_code, l.debit.toFixed(2), l.credit.toFixed(2), l.memo || je.memo, je.entry_type, w.file_name || ""]); }
+  if (!includeExported) for (const je of jes) je.export_batch = batch;
+  return { csv: rows.map((r) => r.map(q).join(",")).join("\n"), count: jes.length };
+}
+
+// ================================================================ UI
+const $ = (s, el = document) => el.querySelector(s);
+const view = $("#view");
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const money = (v) => (v === null || v === undefined || v === "" ? "—" : Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const money0 = (v) => (v === null || v === undefined ? "—" : Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 }));
+const pct = (v) => (v === null || v === undefined ? "—" : Math.round(v * 100) + "%");
+const typeLabel = (t) => META.doc_types[t] ?? t ?? "—";
+const statusPill = (s) => `<span class="pill ${s === "approved" ? "s-pass" : s === "rejected" ? "s-fail" : s === "duplicate" ? "s-warn" : ""}">${esc(s.replace("_", " "))}</span>`;
+const reviewer = $("#reviewer");
+try { reviewer.value = localStorage.getItem("reviewer") || ""; } catch {}
+reviewer.addEventListener("change", () => { try { localStorage.setItem("reviewer", reviewer.value.trim()); } catch {} });
+
+function banner(msg, ok = false) {
+  const w = $("#banner-wrap");
+  w.innerHTML = msg ? `<div class="banner${ok ? " ok" : ""}" role="status">${esc(msg)}</div>` : "";
+  if (msg) window.scrollTo({ top: 0 });
+}
+const queueDocs = () => S.documents.filter((d) => ["needs_review", "duplicate"].includes(d.status)).sort((a, b) => b.id - a.id);
+const firstQueued = (part) => queueDocs().filter((d) => d.file_name.includes(part)).sort((a, b) => a.id - b.id)[0];
+
+function renderDashboard() {
+  const funds = S.funds.map(fundSummary).sort((a, b) => a.name.localeCompare(b.name)), out = outstanding();
+  const sum = (k) => funds.reduce((a, f) => a + (f[k] || 0), 0);
+  const susp = funds.filter((f) => Math.abs(f.suspense) > 0.005);
+  const tour = [
+    ["HRZ4_capital_account_2026-09-30", "A statement that arrives early", "The GP shows Q3 calls we haven't booked yet. See the warnings and the suspense entry, then approve the calls and watch it clear."],
+    ["SRE3_capital_account_2026-09-30", "A statement that doesn't add up", "A $10,000 typo stops it rolling forward. Correct the unrealized gain and the check passes."],
+    ["(1).pdf", "A duplicate download", "The same notice saved twice. Approval is blocked so it can't be booked twice."],
+    ["Bluewater", "A fund we don't hold", "The fund isn't in the master list, so it can't post, even with an override."],
+  ].map(([part, t, s]) => { const d = firstQueued(part); return d ? `<a href="#doc-${d.id}"><b>${esc(t)}</b><span>${esc(s)}</span></a>` : ""; }).join("");
+  view.innerHTML = `
+    <h1>Portfolio</h1>
+    <p class="sub">${funds.length} funds. Balances come from approved documents only. Dates are as of ${TODAY}.</p>
+    ${tour ? `<h2>Try these</h2><div class="tour" style="margin-bottom:16px">${tour}</div>` : ""}
+    <div class="tiles">
+      <div class="tile"><div class="k">Commitments</div><div class="v">${money0(sum("commitment"))}</div></div>
+      <div class="tile"><div class="k">Called</div><div class="v">${money0(sum("called"))}</div></div>
+      <div class="tile"><div class="k">Unfunded</div><div class="v">${money0(sum("unfunded"))}</div></div>
+      <div class="tile"><div class="k">Distributed</div><div class="v">${money0(sum("distributed"))}</div></div>
+      <div class="tile"><div class="k">Book NAV</div><div class="v">${money0(sum("book_nav"))}</div></div>
+      <div class="tile"><div class="k">Open items</div><div class="v">${out.items.length}</div></div>
+    </div>
+    ${susp.length ? `<div class="panel s-warn">Reconciliation suspense is open for ${susp.map((f) => `<a href="#fund-${f.code}">${esc(f.code)}</a> (${money(f.suspense)})`).join(", ")}. It clears when the missing notices are approved.</div>` : ""}
+    <div class="panel table-wrap"><h2>Funds</h2>
+      <table><thead><tr><th>Fund</th><th>Strategy</th><th class="num">Commitment</th><th class="num">Called</th><th class="num">% called</th><th class="num">Unfunded</th><th class="num">Distributed</th><th class="num">Book NAV</th><th>Last statement</th><th class="num">DPI</th><th class="num">TVPI</th></tr></thead>
+      <tbody>${funds.map((f) => `<tr class="click" data-href="#fund-${f.code}"><td><b>${esc(f.code)}</b> <span class="muted">${esc(f.name)}</span></td><td>${esc(f.strategy)}</td>
+        <td class="num">${money0(f.commitment)}</td><td class="num">${money0(f.called)}</td><td class="num">${pct(f.pct_called)}</td><td class="num">${money0(f.unfunded)}</td>
+        <td class="num">${money0(f.distributed)}</td><td class="num">${money0(f.book_nav)}</td><td>${esc(f.last_statement_period || "—")}</td><td class="num">${f.dpi ?? "—"}</td><td class="num">${f.tvpi ?? "—"}</td></tr>`).join("")}</tbody></table></div>
+    <div class="panel table-wrap"><h2>Outstanding items</h2>
+      <p class="sub">Statements for the quarter ended ${esc(out.as_of_quarter)}, final ${out.tax_year} K-1s, and capital calls coming due.</p>
+      <table><thead><tr><th>Fund</th><th>Item</th><th>Status</th><th>Where to get it</th></tr></thead>
+      <tbody>${out.items.map((i) => `<tr ${i.document_id ? `class="click" data-href="#doc-${i.document_id}"` : ""}><td>${esc(i.fund_code || "Unmatched")}</td><td>${esc(i.item)}</td>
+        <td><span class="pill ${i.state === "not received" ? "s-fail" : "s-warn"}">${esc(i.state)}</span></td><td class="muted">${esc(i.portal || "")}</td></tr>`).join("") || `<tr><td colspan="4" class="muted">Nothing outstanding.</td></tr>`}</tbody></table></div>`;
+}
+
+function renderQueue() {
+  const docs = queueDocs();
+  view.innerHTML = `<h1>Review queue</h1>
+    <p class="sub">Each document has been read, matched to a fund and checked against the books. Open one to compare it with the PDF. In the real app you add documents by dropping PDFs here; this demo comes pre-loaded.</p>
+    <div class="panel table-wrap"><table><thead><tr><th>#</th><th>File</th><th>Type</th><th>Fund</th><th>Checks</th><th>Status</th></tr></thead>
+    <tbody>${docs.map((d) => { const v = d.validation || [], f = v.filter((x) => x.status === "fail").length, w = v.filter((x) => x.status === "warn").length;
+      return `<tr class="click" data-href="#doc-${d.id}"><td>${d.id}</td><td>${esc(d.file_name)}</td><td>${esc(typeLabel(d.doc_type))}</td><td>${esc(d.fund_code || "unmatched")}</td>
+      <td>${f ? `<span class="pill s-fail">${f} failed</span> ` : ""}${w ? `<span class="pill s-warn">${w} to review</span>` : ""}${!f && !w ? `<span class="pill s-pass">all passed</span>` : ""}</td><td>${statusPill(d.status)}</td></tr>`; }).join("")
+      || `<tr><td colspan="6" class="muted">The queue is empty. Everything has been reviewed.</td></tr>`}</tbody></table></div>`;
+}
+
+const SECTION_FIELDS = {
+  capital_call: ["capital_call", [["investment", "Investment"], ["management_fee", "Management fee"], ["fund_expenses", "Fund expenses"], ["other", "Other"], ["total", "Total due"]]],
+  distribution: ["distribution", [["return_of_capital", "Return of capital"], ["realized_gain", "Realized gain"], ["income", "Income"], ["withholding", "Tax withheld"], ["net_amount", "Net cash"], ["recallable", "Recallable"]]],
+  capital_account_statement: ["capital_account", [["beginning_balance", "Beginning capital"], ["contributions", "Contributions"], ["distributions", "Distributions"], ["investment_income", "Investment income"], ["expenses", "Fees & expenses"], ["realized_gain", "Realized gain"], ["unrealized_gain", "Unrealized gain"], ["carried_interest", "Carried interest"], ["ending_balance", "Ending capital (NAV)"], ["unfunded_commitment", "Unfunded commitment"]]],
+  k1: ["k1", [["ordinary_income", "Box 1 Ordinary income"], ["interest_income", "Box 5 Interest"], ["dividends", "Box 6a Dividends"], ["st_capital_gain", "Box 8 ST capital gain"], ["lt_capital_gain", "Box 9a LT capital gain"], ["distributions", "Box 19 Distributions"], ["ending_capital", "Ending capital (Item L)"]]],
+  financial_statements: ["financial_statements", [["fund_total_nav", "Fund total partners' capital"]]],
+};
+const DATE_FIELDS = {
+  capital_call: [["notice_date", "Notice date"], ["effective_date", "Due date"]], distribution: [["notice_date", "Notice date"], ["effective_date", "Payment date"]],
+  capital_account_statement: [["period_start", "Period start"], ["period_end", "Period end"]], financial_statements: [["period_end", "As of"]], k1: [], other: [["notice_date", "Document date"]],
+};
+function jeTable(entries, posted) {
+  if (!entries?.length) return `<p class="muted">${posted ? "Nothing posted." : "No journal entry for this document type. It is tracked, not posted."}</p>`;
+  const acct = (l) => `${l.account_number ?? META.accounts[l.account_key].number} ${l.account_name ?? META.accounts[l.account_key].name}`;
+  return entries.map((e) => `<div class="je"><div class="je-head">${esc(e.entry_date)} · ${esc(e.memo)}${e.export_batch ? ` · exported in ${esc(e.export_batch)}` : ""}</div>
+    <div class="table-wrap"><table><thead><tr><th>Account</th><th class="num">Debit</th><th class="num">Credit</th><th>Memo</th></tr></thead><tbody>
+    ${e.lines.map((l) => `<tr${l.account_key === "recon_suspense" ? ' class="susp"' : ""}><td class="acct">${esc(acct(l))}</td><td class="num">${l.debit ? money(l.debit) : ""}</td><td class="num">${l.credit ? money(l.credit) : ""}</td><td class="muted">${esc(l.memo || "")}</td></tr>`).join("")}
+    </tbody></table></div></div>`).join("");
+}
+
+function renderDoc(id) {
+  const doc = getDocument(id);
+  if (!doc) { view.innerHTML = `<p>That document doesn't exist. <a href="#queue">Back to the queue</a></p>`; return; }
+  const ex = doc.extraction || {}, t = doc.doc_type || "other", editable = ["needs_review", "duplicate"].includes(doc.status);
+  const unsure = new Set(ex.uncertain_fields || []);
+  const input = (name, label, value, type = "number") => `<label for="f-${name}" class="${unsure.has(name) ? "uncertain" : ""}">${esc(label)}${unsure.has(name) ? " (unclear)" : ""}
+    <input id="f-${name}" name="${name}" type="${type}" ${type === "number" ? 'step="0.01" class="num"' : ""} value="${esc(value ?? "")}" ${editable ? "" : "disabled"}></label>`;
+  const [section, fields] = SECTION_FIELDS[t] || [null, []];
+  const sec = (section && ex[section]) || {}, checks = doc.validation || [], hasFail = checks.some((c) => c.status === "fail");
+  view.innerHTML = `
+    <p><a href="#queue">← Review queue</a></p>
+    <h1>${esc(doc.file_name)}</h1>
+    <p class="sub">#${doc.id} · ${esc(typeLabel(t))} · ${statusPill(doc.status)}${doc.reviewed_by ? ` · ${esc(doc.status)} by ${esc(doc.reviewed_by)}${doc.review_note ? `: “${esc(doc.review_note)}”` : ""}` : ""}</p>
+    <div class="review">
+      <div class="source"><img src="${IMAGES[doc.sha256]}" alt="Source document: ${esc(doc.file_name)}"><div class="cap">Source PDF as downloaded from the GP portal</div></div>
+      <div>
+        <form class="panel" id="form"><h2>Extracted data</h2>
+          <div class="fields">
+            <label for="f-doc_type">Document type<select id="f-doc_type" name="doc_type" ${editable ? "" : "disabled"}>${Object.entries(META.doc_types).map(([k, v]) => `<option value="${k}" ${k === t ? "selected" : ""}>${esc(v)}</option>`).join("")}</select></label>
+            <label for="f-fund_code">Fund<select id="f-fund_code" name="fund_code" ${editable ? "" : "disabled"}><option value="">— not matched —</option>${S.funds.map((f) => `<option value="${f.code}" ${f.code === doc.fund_code ? "selected" : ""}>${esc(f.code)} · ${esc(f.name)}</option>`).join("")}</select></label>
+            ${input("fund_name", "Fund name as printed", ex.fund_name, "text")}
+            ${t === "k1" ? input("tax_year", "Tax year", ex.tax_year) : ""}
+            ${(DATE_FIELDS[t] || []).map(([k, l]) => input(k, l, ex[k], "date")).join("")}
+            ${fields.map(([k, l]) => input(`${section}.${k}`, l, sec[k])).join("")}
+            ${t === "k1" ? `<label for="f-k1final">Final K-1?<select id="f-k1final" name="k1.is_final" ${editable ? "" : "disabled"}><option value="true" ${sec.is_final ? "selected" : ""}>Final</option><option value="false" ${sec.is_final ? "" : "selected"}>Estimate</option></select></label>` : ""}
+          </div>
+          ${editable ? `<div class="actions"><button type="submit">Save changes &amp; re-check</button></div>` : ""}
+        </form>
+        <div class="panel"><h2>Checks</h2><ul class="checks">
+          ${checks.map((c) => `<li><span class="badge s-${c.status}">${c.status}</span><div><div>${esc(c.label)}</div>${c.detail ? `<div class="detail">${esc(c.detail)}</div>` : ""}</div></li>`).join("")}</ul></div>
+        <div class="panel"><h2>${doc.status === "approved" ? "Posted journal entries" : "Journal entries that will post"}</h2>
+          ${doc.status === "approved" ? jeTable(doc.posted_entries, true) : jeTable(doc.proposed_entries, false)}</div>
+        ${editable ? `<div class="panel"><h2>Decision</h2>
+          <label for="note" class="muted" style="font-size:12px">Note (required to override a failed check)</label>
+          <textarea id="note" rows="2" style="width:100%"></textarea>
+          <div class="actions">
+            ${hasFail ? `<label class="row" for="override"><input type="checkbox" id="override"> Override failed checks</label>` : ""}
+            <button class="primary" id="approve" type="button">Approve &amp; post</button>
+            <button class="danger" id="reject" type="button">Reject</button>
+          </div></div>` : ""}
+        <div class="panel"><h2>History</h2>${doc.history.map((h) => `<div class="muted">${esc(h.ts.replace("T", " ").slice(0, 16))} · ${esc(h.actor || "system")} · ${esc(h.action)}</div>`).join("")}</div>
+      </div>
+    </div>`;
+  if (!editable) return;
+  $("#form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target), extraction = {};
+    for (const [k, v] of fd.entries()) {
+      if (k === "doc_type" || k === "fund_code") continue;
+      const val = v === "" ? null : k === "k1.is_final" ? v === "true" : k.includes(".") || k === "tax_year" ? Number(v) : v;
+      if (k.includes(".")) { const [s, f] = k.split("."); (extraction[s] ||= { ...(ex[s] || {}) })[f] = val; } else extraction[k] = val;
+    }
+    try { updateDocument(doc.id, reviewer.value.trim(), extraction, fd.get("fund_code"), fd.get("doc_type")); renderDoc(doc.id); banner("Saved. Checks re-run against the books.", true); }
+    catch (err) { banner(err.message); }
+  });
+  const decide = (fn) => {
+    const actor = reviewer.value.trim();
+    if (!actor) { reviewer.focus(); return banner("Enter your name in the Reviewer box at the top first; it is recorded on the decision."); }
+    try { fn(actor, $("#note").value.trim() || null); refreshCount(); renderDoc(doc.id); banner(fn === doApprove ? "Approved and posted to the journal." : "Rejected.", true); }
+    catch (err) { renderDoc(doc.id); banner(err.message); }
+  };
+  const doApprove = (a, note) => approve(doc.id, a, note, !!$("#override")?.checked);
+  $("#approve").addEventListener("click", () => decide(doApprove));
+  $("#reject").addEventListener("click", () => decide((a, note) => reject(doc.id, a, note)));
+}
+
+function renderFunds() {
+  view.innerHTML = `<h1>Funds</h1><p class="sub">The fund master list. Names and aliases are how incoming documents get matched to a fund.</p>
+    <div class="panel table-wrap"><table><thead><tr><th>Code</th><th>Name</th><th>GP</th><th>Aliases</th><th>Vintage</th><th class="num">Commitment</th><th>Portal</th></tr></thead>
+    <tbody>${S.funds.map((f) => `<tr class="click" data-href="#fund-${f.code}"><td><b>${esc(f.code)}</b></td><td>${esc(f.name)}</td><td>${esc(f.gp_name)}</td><td class="muted">${esc(f.aliases.join(", "))}</td><td>${esc(f.vintage)}</td><td class="num">${money0(f.commitment)}</td><td>${esc(f.portal)}</td></tr>`).join("")}</tbody></table></div>`;
+}
+function renderFund(code) {
+  const f = fundBy(code);
+  if (!f) { view.innerHTML = `<p>Fund not found. <a href="#funds">All funds</a></p>`; return; }
+  const s = fundSummary(f);
+  const txns = S.transactions.filter((t) => t.fund_code === code).sort((a, b) => (a.effective_date < b.effective_date ? -1 : 1));
+  const stmts = S.statements.filter((t) => t.fund_code === code).sort((a, b) => (a.period_end < b.period_end ? -1 : 1));
+  const docs = S.documents.filter((d) => d.fund_code === code).sort((a, b) => b.id - a.id);
+  view.innerHTML = `<p><a href="#dashboard">← Dashboard</a></p><h1>${esc(s.code)} · ${esc(s.name)}</h1>
+    <p class="sub">${esc(s.gp_name)} · ${esc(s.strategy)} · vintage ${esc(s.vintage)} · portal: ${esc(s.portal)}</p>
+    <div class="tiles">
+      <div class="tile"><div class="k">Commitment</div><div class="v">${money0(s.commitment)}</div></div>
+      <div class="tile"><div class="k">Called</div><div class="v">${money0(s.called)}</div></div>
+      <div class="tile"><div class="k">Unfunded</div><div class="v">${money0(s.unfunded)}</div></div>
+      <div class="tile"><div class="k">Distributed</div><div class="v">${money0(s.distributed)}</div></div>
+      <div class="tile"><div class="k">Book NAV</div><div class="v">${money0(s.book_nav)}</div></div>
+      <div class="tile"><div class="k">Suspense</div><div class="v">${money(s.suspense)}</div></div>
+    </div>
+    <div class="panel table-wrap"><h2>Cash activity</h2><table><thead><tr><th>Date</th><th>Type</th><th class="num">Amount</th><th class="num">Recallable</th><th>Source</th></tr></thead>
+      <tbody>${txns.map((t) => `<tr ${t.document_id ? `class="click" data-href="#doc-${t.document_id}"` : ""}><td>${esc(t.effective_date)}</td><td>${esc(t.txn_type.replace("_", " "))}</td><td class="num">${money(t.amount)}</td><td class="num">${t.recallable ? money(t.recallable) : ""}</td><td class="muted">${esc(t.document_id ? docBy(t.document_id).file_name : "conversion from prior system")}</td></tr>`).join("")}</tbody></table></div>
+    <div class="panel table-wrap"><h2>Capital account per GP statements</h2><table><thead><tr><th>Period end</th><th class="num">Beginning</th><th class="num">Contrib.</th><th class="num">Distrib.</th><th class="num">Income</th><th class="num">Expenses</th><th class="num">Realized</th><th class="num">Unrealized</th><th class="num">Carry</th><th class="num">Ending NAV</th></tr></thead>
+      <tbody>${stmts.map((r) => `<tr ${r.document_id ? `class="click" data-href="#doc-${r.document_id}"` : ""}><td>${esc(r.period_end)}${r.document_id ? "" : ' <span class="muted">(opening)</span>'}</td>${["beginning_balance", "contributions", "distributions", "investment_income", "expenses", "realized_gain", "unrealized_gain", "carried_interest", "ending_balance"].map((k) => `<td class="num">${money(r[k])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+    <div class="panel table-wrap"><h2>Documents</h2><table><tbody>${docs.map((x) => `<tr class="click" data-href="#doc-${x.id}"><td>#${x.id}</td><td>${esc(x.file_name)}</td><td>${esc(typeLabel(x.doc_type))}</td><td>${statusPill(x.status)}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+let lastExport = null;
+function renderJournal() {
+  const all = [...S.journal_entries].sort((a, b) => b.id - a.id).map(withLines), pending = all.filter((e) => !e.export_batch).length;
+  view.innerHTML = `<h1>Journal &amp; export</h1>
+    <p class="sub">Entries created from approved documents. Export makes a CSV in a generic GL-import layout, which you then map to your accounting system's import template.</p>
+    <div class="panel"><div class="row"><span><b>${pending}</b> entries not yet exported.</span>
+      <button class="primary" id="export" type="button" ${pending ? "" : "disabled"}>Export new entries</button>
+      <button id="reexport" type="button">Show all entries as CSV</button></div>
+      ${lastExport ? `<div style="margin-top:12px"><div class="row" style="margin-bottom:6px"><span class="muted">${esc(lastExport.label)}</span><button id="copy" type="button">Copy CSV</button></div>
+        <textarea class="csv" id="csv" readonly aria-label="CSV export">${esc(lastExport.csv)}</textarea></div>` : ""}</div>
+    <div class="panel"><h2>All entries, newest first</h2>${jeTable(all, true)}</div>`;
+  const run = (inc) => {
+    const batch = "EXP-" + nowIso().replace(/[-:]/g, "").slice(0, 15);
+    const { csv, count } = exportCsv(batch, inc);
+    audit(reviewer.value.trim(), "exported", null, { batch, entries: count, re_export: inc });
+    lastExport = { csv, label: inc ? `All ${count} entries (nothing marked as exported)` : `Batch ${batch}: ${count} entries, now marked as exported` };
+    renderJournal();
+  };
+  $("#export").addEventListener("click", () => run(false));
+  $("#reexport").addEventListener("click", () => run(true));
+  $("#copy")?.addEventListener("click", () => {
+    const ta = $("#csv");
+    navigator.clipboard.writeText(ta.value).then(() => banner("CSV copied. Paste it into a spreadsheet to see the columns.", true))
+      .catch(() => { ta.focus(); ta.select(); banner("Copying isn't allowed here. The text is selected; press Ctrl+C or ⌘C.", true); });
+  });
+}
+function renderK1s() {
+  const out = outstanding(), missing = out.items.filter((i) => i.kind === "k1");
+  const k1s = [...S.k1s].sort((a, b) => b.tax_year - a.tax_year || a.fund_code.localeCompare(b.fund_code));
+  view.innerHTML = `<h1>K-1 tracker</h1><p class="sub">Approved K-1s with the main boxes, for the tax team. ${missing.length} fund(s) still owe a final ${out.tax_year} K-1.</p>
+    ${missing.length ? `<div class="panel">${missing.map((m) => `<div class="row" style="padding:3px 0"><b>${esc(m.fund_code)}</b> ${esc(fundBy(m.fund_code).name)} <span class="pill ${m.state === "not received" ? "s-fail" : "s-warn"}">${esc(m.state)}</span> <span class="muted">${esc(m.portal || "")}</span>${m.document_id ? ` <a href="#doc-${m.document_id}">review</a>` : ""}</div>`).join("")}</div>` : ""}
+    <div class="panel table-wrap"><table><thead><tr><th>Year</th><th>Fund</th><th>Final?</th><th class="num">Box 1</th><th class="num">Box 5</th><th class="num">Box 6a</th><th class="num">Box 8</th><th class="num">Box 9a</th><th class="num">Box 19</th></tr></thead>
+    <tbody>${k1s.map((k) => `<tr class="click" data-href="#doc-${k.document_id}"><td>${k.tax_year}</td><td>${esc(k.fund_code)} <span class="muted">${esc(fundBy(k.fund_code).name)}</span></td><td>${k.is_final ? "Final" : '<span class="pill s-warn">Estimate</span>'}</td>
+      ${["ordinary_income", "interest_income", "dividends", "st_capital_gain", "lt_capital_gain", "distributions"].map((b) => `<td class="num">${money(k.boxes[b])}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="9" class="muted">None yet.</td></tr>`}</tbody></table></div>`;
+}
+function renderAudit() {
+  const log = [...S.audit_log].sort((a, b) => b.id - a.id).slice(0, 300);
+  view.innerHTML = `<h1>Audit log</h1><p class="sub">Every upload, edit, approval, rejection and export, newest first.</p>
+    <div class="panel table-wrap"><table><thead><tr><th>When (UTC)</th><th>Who</th><th>Action</th><th>Document</th><th>Detail</th></tr></thead>
+    <tbody>${log.map((a) => `<tr ${a.document_id ? `class="click" data-href="#doc-${a.document_id}"` : ""}><td class="mono">${esc(a.ts.replace("T", " ").slice(0, 19))}</td><td>${esc(a.actor || "system")}</td><td>${esc(a.action.replace("_", " "))}</td><td>${esc(a.document_id ? docBy(a.document_id)?.file_name : "")}</td><td class="mono muted">${esc(a.detail ? JSON.stringify(a.detail) : "")}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function refreshCount() { $("#queue-count").textContent = queueDocs().length || ""; }
+function route() {
+  const h = location.hash.slice(1) || "dashboard";
+  const m = h.match(/^(doc|fund)-(.+)$/);
+  const name = m ? m[1] : h;
+  document.querySelectorAll("#tabs a").forEach((a) => a.classList.toggle("active", a.getAttribute("href") === "#" + (name === "doc" ? "queue" : name === "fund" ? "funds" : name)));
+  const pages = { dashboard: renderDashboard, queue: renderQueue, funds: renderFunds, journal: renderJournal, k1s: renderK1s, audit: renderAudit,
+    doc: () => renderDoc(m[2]), fund: () => renderFund(m[2]) };
+  (pages[name] || renderDashboard)();
+  refreshCount();
+}
+view.addEventListener("click", (e) => {
+  const tr = e.target.closest("tr[data-href]");
+  if (tr && !e.target.closest("a, button, input, select, textarea")) location.hash = tr.dataset.href;
+});
+window.addEventListener("hashchange", () => { banner(null); route(); window.scrollTo({ top: 0 }); });
+$("#reset").addEventListener("click", () => { resetState(); lastExport = null; banner("Started over with the original sample data.", true); route(); });
+resetState();
+route();
+</script>
