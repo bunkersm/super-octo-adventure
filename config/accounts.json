@@ -1,0 +1,17 @@
+{
+  "_comment": "Chart of accounts used to build journal entries. Change the numbers/names to match your investment accounting system. Each fund's code is carried on every line as a sub-ledger / dimension.",
+  "entity": "MAIN",
+  "accounts": {
+    "investment":            {"number": "1500", "name": "Investments in Partnerships"},
+    "distribution_receivable": {"number": "1210", "name": "Distributions Receivable"},
+    "capital_call_payable":  {"number": "2100", "name": "Capital Calls Payable"},
+    "tax_withheld":          {"number": "1350", "name": "Foreign / State Tax Withheld"},
+    "opening_equity":        {"number": "3900", "name": "Opening Balance Equity"},
+    "investment_income":     {"number": "4100", "name": "Partnership Investment Income"},
+    "realized_gain":         {"number": "4200", "name": "Realized Gain (Loss) - Partnerships"},
+    "unrealized_gain":       {"number": "4300", "name": "Unrealized Gain (Loss) - Partnerships"},
+    "partnership_expenses":  {"number": "5100", "name": "Partnership Fees & Expenses"},
+    "carried_interest":      {"number": "5200", "name": "Carried Interest Allocation"},
+    "recon_suspense":        {"number": "1599", "name": "Partnership Reconciliation Suspense"}
+  }
+}

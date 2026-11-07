@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LP Activity Tracker</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">LP Activity Tracker</div>
+    <nav id="tabs">
+      <a href="#dashboard">Dashboard</a>
+      <a href="#queue">Review queue <span id="queue-count" class="pill"></span></a>
+      <a href="#funds">Funds</a>
+      <a href="#journal">Journal &amp; export</a>
+      <a href="#k1s">K-1s</a>
+      <a href="#audit">Audit log</a>
+    </nav>
+    <label class="reviewer">Reviewer <input id="reviewer" placeholder="Your name" autocomplete="name"></label>
+  </header>
+  <div id="banner" class="banner" hidden></div>
+  <main id="view"></main>
+  <script src="app.js"></script>
+</body>
+</html>

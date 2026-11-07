@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+# Local data: database, uploaded/generated PDFs, exports. Never commit real statements.
+data/
