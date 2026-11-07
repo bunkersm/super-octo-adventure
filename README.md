@@ -8,6 +8,10 @@ investment accounting system.
 > **Demo data only.** Everything in the sample data is synthetic. This repository is public; do not
 > commit real statements, K-1s or fund names. The `data/` folder is git-ignored for that reason.
 
+![Reviewing a capital account statement against its PDF](screenshots/3-review-statement.png)
+
+More screenshots (dashboard, review queue, fund detail) are in [`screenshots/`](screenshots/).
+
 ## What it does
 
 ```
